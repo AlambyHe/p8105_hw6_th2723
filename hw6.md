@@ -253,3 +253,122 @@ cv_df %>%
 ```
 
 ![](hw6_files/figure-markdown_github/unnamed-chunk-4-1.png) After comparing the violin plot of rmse for the three models, my model using stepwise function has the lowest rmse among three models and thus has least predicted error. It is also reasonable because this model predictor package is automatically chosen by R.
+
+``` r
+#basic setup
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+    ## file path:          /Users/hetianhui/Library/Caches/rnoaa/ghcnd/USW00094728.dly
+
+    ## file last updated:  2019-09-26 10:26:12
+
+    ## file min/max dates: 1869-01-01 / 2019-09-30
+
+``` r
+lm(tmax ~ tmin, data = weather_df) %>% 
+  broom::tidy() %>% 
+  knitr::kable()
+```
+
+| term        |  estimate|  std.error|  statistic|  p.value|
+|:------------|---------:|----------:|----------:|--------:|
+| (Intercept) |  7.208502|  0.2263474|   31.84707|        0|
+| tmin        |  1.039241|  0.0169919|   61.16096|        0|
+
+``` r
+x = weather_df
+boot_sample = function(x) {
+  sample_frac(x, replace = TRUE)
+}#generate boot sample
+
+bootstraps_data = 
+  list(
+    strap_number = 1:5000,
+    strap_sample = rerun(5000, boot_sample(x))
+  ) #Drawing 5000 bootstrap samples
+
+weather_bootstrap = weather_df %>% 
+  modelr::bootstrap(n = 5000) 
+
+weather1 = weather_bootstrap %>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data =.x)),
+    results = map(models, broom::glance)) %>% 
+    select(-strap, -models) %>% 
+    unnest(results) %>% 
+    janitor::clean_names() 
+```
+
+``` r
+weather1 %>% 
+  ggplot(aes(x = r_squared)) + geom_density(alpha = 0.5) + labs(title = "Distribution of R-square")
+```
+
+![](hw6_files/figure-markdown_github/unnamed-chunk-7-1.png) According to the above graph, r-squared for each strap is nearly normally distributed (bell-shape). However, it is a little left-skewed, implying that there are some extremely high r-squared score that drive the entire distribution to the right.
+
+``` r
+log_info = 
+weather_bootstrap%>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data =.x)),
+    results = map(models, broom::tidy)) %>% 
+    select(-strap, -models) %>% 
+    unnest(results) %>% 
+   janitor::clean_names() %>% 
+   select(id, term, estimate) %>% 
+   # spread(key = term, value = estimate)
+  pivot_wider(
+    names_from = "term",
+    values_from = "estimate"
+  )  %>%
+  rename(intercept= '(Intercept)') %>% 
+  mutate(log_calc = log(intercept*tmin)) 
+```
+
+``` r
+log_info %>% 
+  ggplot(aes(x = log_calc)) + geom_density(alpha = 0.5) + labs(title = "Distribution of log(beta0_hat * beta1_hat)")
+```
+
+![](hw6_files/figure-markdown_github/unnamed-chunk-9-1.png) Compared to the distribution of r-squared, we can see that the log(beta0\_hat \* beta1\_hat) estimates are more normally distributed.
+
+95% confidence interval:
+
+``` r
+#for r-square
+weather1 %>% 
+  pull(r_squared) %>% 
+  quantile(., probs = c(0.025, 0.975, 0.95), na.rm = TRUE) %>% 
+  knitr::kable()
+```
+
+|       |          x|
+|-------|----------:|
+| 2.5%  |  0.8941667|
+| 97.5% |  0.9270552|
+| 95%   |  0.9249372|
+
+``` r
+#for log(beta0_hat * beta1_hat)
+log_info %>% 
+  pull(log_calc) %>% 
+  quantile(., probs = c(0.025, 0.975, 0.95), na.rm = TRUE) %>% 
+  knitr::kable()
+```
+
+|       |         x|
+|-------|---------:|
+| 2.5%  |  1.963307|
+| 97.5% |  2.058308|
+| 95%   |  2.051909|
