@@ -1,0 +1,38 @@
+---
+title: "p8105_hw6_th2723"
+author: "Tianhui He"
+date: "2019/11/24"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+```
+
+```{r Problem1}
+#basic setup
+birthweight = read.csv("./data/birthweight.csv")
+birthweight = birthweight %>% 
+  mutate(babysex = as.factor(babysex),
+         frace = as.factor(frace),
+         mrace = as.factor(mrace),
+         malform = as.factor(malform))
+```
+According to what I learned from biostatistic method class, "stepwise" modeling could help us to choose a best model automatically.
+```{r}
+best_model = step(lm(bwt~., data = birthweight), direction = "backward")
+```
+This stepwise function give us the best model using babysex,bhead,blength, delwt,fincome, gaweeks, mheight, mrace, parity, ppwt and smoken as predictors. A brief glance of the 'best model' chosen by R using regression summary. The global p-value shows that it is significant under 0.05 significance level.
+```{r}
+best_model %>% summary()
+```
+
+```{r}
+birthweight %>% 
+  modelr::add_predictions(best_model) %>% 
+  modelr::add_residuals(best_model) %>% 
+  ggplot(aes(x = pred, y = resid)) + geom_point() + geom_smooth(se = F) + theme_bw() + labs(x = "Fitted Value", y = 'Residuals', title = "Residuals vs Fitted value") + theme(plot.title = element_text(hjust = 0.5))
+```
+
