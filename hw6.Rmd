@@ -20,7 +20,7 @@ birthweight = birthweight %>%
          mrace = as.factor(mrace),
          malform = as.factor(malform))
 ```
-According to what I learned from biostatistic method class, "stepwise" modeling could help us to choose a best model automatically.
+According to what I learned from biostatistical method class, "stepwise" modeling could help us to choose a best model automatically.
 ```{r}
 best_model = step(lm(bwt~., data = birthweight), direction = "backward")
 ```
