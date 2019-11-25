@@ -163,7 +163,7 @@ best_model = step(lm(bwt~., data = birthweight), direction = "backward")
     ## - blength  1 102191779 423178191 49903
     ## - bhead    1 106779754 427766166 49950
 
-This stepwise function give us the best model using babysex,bhead,blength, delwt,fincome, gaweeks, mheight, mrace, parity, ppwt and smoken as predictors. A brief glance of the 'best model' chosen by R using regression summary. The global p-value shows that it is significant under 0.05 significance level.
+This stepwise function gives us the best model using babysex,bhead,blength, delwt,fincome, gaweeks, mheight, mrace, parity, ppwt and smoken as predictors. A brief glance of the 'best model' chosen by R using regression summary. The global p-value shows that it is significant under 0.05 significance level.
 
 ``` r
 best_model %>% summary()
@@ -205,9 +205,51 @@ best_model %>% summary()
 birthweight %>% 
   modelr::add_predictions(best_model) %>% 
   modelr::add_residuals(best_model) %>% 
-  ggplot(aes(x = pred, y = resid)) + geom_point() + geom_smooth(se = F) + theme_bw() + labs(x = "Fitted Value", y = 'Residuals', title = "Residuals vs Fitted value") + theme(plot.title = element_text(hjust = 0.5))
+  ggplot(aes(x = pred, y = resid)) + geom_point(alpha = 0.3) + theme_bw() + labs(x = "Fitted Value", y = 'Residuals', title = "Fitted value VS Residuals")
 ```
 
-    ## `geom_smooth()` using method = 'gam' and formula 'y ~ s(x, bs = "cs")'
-
 ![](hw6_files/figure-markdown_github/unnamed-chunk-3-1.png)
+
+``` r
+set.seed(1)
+model2 = lm(bwt ~ blength + gaweeks, data = birthweight)
+model3 = lm(bwt ~ bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = birthweight)
+
+cv_df = 
+  modelr::crossv_mc(birthweight, 100)
+cv_df =
+  cv_df %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+
+cv_df = 
+  cv_df %>% 
+  mutate(
+  best_model= map(train, ~lm(formula = bwt ~ babysex + bhead + blength + delwt + fincome + gaweeks + mheight + mrace + parity + ppwt + smoken, data =.x)),
+  model2  = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+  model3  = map(train, ~lm(bwt ~ bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = .x))) %>% 
+  mutate(rmse_best_model = map2_dbl(best_model, test, ~ modelr::rmse(model = .x, data = .y)),
+         rmse_model2 = map2_dbl(model2, test, ~ modelr::rmse(model = .x, data = .y)),
+         rmse_model3 = map2_dbl(model3, test, ~ modelr::rmse(model = .x, data = .y)))
+```
+
+    ## Warning in predict.lm(model, data): prediction from a rank-deficient fit
+    ## may be misleading
+
+    ## Warning in predict.lm(model, data): prediction from a rank-deficient fit
+    ## may be misleading
+
+``` r
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
+![](hw6_files/figure-markdown_github/unnamed-chunk-4-1.png) After comparing the violin plot of rmse for the three models, my model using stepwise function has the lowest rmse among three models and thus has least predicted error. It is also reasonable because this model predictor package is automatically chosen by R.
